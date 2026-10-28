@@ -1,0 +1,15 @@
+# Secrets and authentication
+tokens.json
+token.json
+.env
+.env.*
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Raw API responses and generated data
+data/raw/
+data/processed/
