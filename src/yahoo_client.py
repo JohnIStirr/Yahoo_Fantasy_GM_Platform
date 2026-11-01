@@ -1,10 +1,10 @@
 import json
 import requests
-from pathlib import Path
-from datetime import datetime, timezone
 
-TOKEN_FILE = "tokens.json"
+from paths import PROJECT_ROOT
+from storage import save_bronze_response
 
+TOKEN_FILE = PROJECT_ROOT / "tokens.json"
 BASE_URL = "https://fantasysports.yahooapis.com/fantasy/v2"
 
 
@@ -62,27 +62,6 @@ def get_user_games():
 
 
 
-def save_raw_data(data, sport, resource):
-    # Create a timestamp so each extraction gets a unique filename.
-    timestamp = datetime.now(timezone.utc).strftime(
-        "%Y%m%dT%H%M%SZ"
-    )
-
-    # Organize raw data by sport and resource type.
-    output_dir = Path("data") / "raw" / sport / resource
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Build the output filename using the resource and timestamp.
-    output_file = output_dir / f"{resource}_{timestamp}.json"
-
-    # Save the original API response so we can process it later.
-    with output_file.open("w", encoding="utf-8") as file:
-        json.dump(data, file, indent=2, ensure_ascii=False)
-
-    # Print the file location so we can verify the extraction.
-    print(f"Saved raw data to: {output_file}")
-
-
 def get_leagues_by_sport(sport):
     return yahoo_get(
         f"/users;use_login=1/games;game_codes={sport}/leagues"
@@ -107,29 +86,69 @@ def get_roster_by_team(team_key):
 
 
 
+def walk_for_key(value, target_key):
+    """Find values for a key inside Yahoo's nested response."""
+    if isinstance(value, dict):
+        if target_key in value:
+            yield value[target_key]
+
+        for child in value.values():
+            yield from walk_for_key(child, target_key)
+
+    elif isinstance(value, list):
+        for child in value:
+            yield from walk_for_key(child, target_key)
+
+
 if __name__ == "__main__":
-    # Identify the NBA league we want to collect data from.
     league_key = "478.l.105854"
 
     print(f"\nFetching teams for league {league_key}...")
 
-    # Get the team IDs from Yahoo instead of hardcoding team names.
+    # Save the fantasy-team response in the league-specific Bronze layer.
+    teams_endpoint = f"/league/{league_key}/teams"
     teams_data = get_teams_by_league(league_key)
 
-    # Team IDs run from 1 to 12 in this league.
-    # Each team's key identifies its roster in the API.
-    for team_id in range(1, 13):
-        team_key = f"{league_key}.t.{team_id}"
+    save_bronze_response(
+        teams_data,
+        resource="fantasy_teams",
+        category="league/fantasy_teams",
+        league_key=league_key,
+        request_endpoint=teams_endpoint,
+    )
+
+    # Discover team keys from Yahoo instead of assuming 12 teams.
+    team_keys = sorted({
+        key
+        for key in walk_for_key(teams_data, "team_key")
+        if isinstance(key, str)
+        and key.startswith(f"{league_key}.t.")
+    })
+
+    if not team_keys:
+        raise RuntimeError(
+            "No fantasy team keys found in Yahoo's response."
+        )
+
+    print(f"Found {len(team_keys)} fantasy teams.")
+
+    for team_key in team_keys:
+        team_id = team_key.rsplit(".t.", 1)[-1]
+        endpoint = f"/team/{team_key}/roster"
 
         print(f"\nFetching roster for team {team_id}...")
 
-        # Fetch the roster for this team.
         roster_data = get_roster_by_team(team_key)
 
-        # Give each team its own folder so files don't overwrite each other.
-        resource_name = f"roster_team_{team_id}"
-        save_raw_data(roster_data, "nba", resource_name)
+        save_bronze_response(
+            roster_data,
+            resource=f"roster_team_{team_id}",
+            category="league/rosters",
+            league_key=league_key,
+            request_endpoint=endpoint,
+        )
 
-    print("\nFinished fetching all 12 team rosters.")
+    print("\nFinished fetching all fantasy-team rosters.")
+
 
 
