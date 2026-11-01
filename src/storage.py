@@ -120,11 +120,17 @@ def save_bronze_run_manifest(
     sport=SPORT,
     season=SEASON,
 ):
-    """Save a manifest describing one completed or failed ingestion run."""
+    """Create or update the manifest for one ingestion run."""
     if not isinstance(manifest, dict):
         raise TypeError("manifest must be a dictionary")
 
-    # Use the same explicit destination rules as Bronze payloads.
+    run_id = str(manifest.get("run_id", "")).strip()
+    if not run_id:
+        raise ValueError("manifest must contain a non-empty run_id")
+
+    if not resource or not str(resource).strip():
+        raise ValueError("resource must be a non-empty name")
+
     output_dir = bronze_resource_dir(
         category,
         league_key=league_key,
@@ -134,16 +140,13 @@ def save_bronze_run_manifest(
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Add a unique UTC timestamp to avoid replacing earlier manifests.
-    timestamp = datetime.now(timezone.utc).strftime(
-        "%Y%m%dT%H%M%S.%fZ"
-    )
+    # Use a stable filename so repeated saves update the same run.
     safe_resource = _safe_name(str(resource))
+    safe_run_id = _safe_name(run_id)
     manifest_path = output_dir / (
-        f"{safe_resource}_{timestamp}.run.json"
+        f"{safe_resource}_{safe_run_id}.run.json"
     )
 
-    # Keep the pipeline's identifying metadata authoritative.
     document = {
         **manifest,
         "manifest_version": 1,
@@ -159,7 +162,6 @@ def save_bronze_run_manifest(
 
     print(f"Saved Bronze run manifest to: {manifest_path}")
     return manifest_path
-
 
 def save_experiment_response(
     payload,

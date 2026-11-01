@@ -1,7 +1,7 @@
 
 import csv
 from pathlib import Path
-from inspect_teams import extract_teams
+from parsers.teams import extract_teams
 
 DATA_DIR = Path("data/raw/nba/teams")
 OUTPUT_FILE = Path("data/processed/teams.csv")

@@ -6,7 +6,7 @@ from pathlib import Path
 # Ensure Python imports the parser from this project's src directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inspect_roster import extract_roster
+from parsers.rosters import extract_roster
 
 
 DATA_DIR = Path("data/raw/nba")

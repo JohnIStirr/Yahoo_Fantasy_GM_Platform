@@ -2,7 +2,7 @@
 import csv
 from pathlib import Path
 
-from inspect_data import extract_leagues
+from parsers.leagues import extract_leagues
 
 
 # Read raw data and save the combined league summary here.
